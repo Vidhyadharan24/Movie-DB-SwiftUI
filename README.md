@@ -7,7 +7,8 @@ The app is built using the MVVM + RxSwift architecture with offline support via 
 - [ ] Movie Details page.
 - [ ] Unit testing of view models.
 - [ ] Unit testing of store class.
-- [ ] rewrite network manager using combine.
+- [ ] Rewrite network manager using combine.
+- [ ] Monitoring network connection and refreshing UI.
 
 ## Installation
 
