@@ -13,8 +13,8 @@ struct Movie_DB_SwiftUIApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            MoviesList()
+                .environment(\.managedObjectContext, persistenceController.viewContext)
         }
     }
 }

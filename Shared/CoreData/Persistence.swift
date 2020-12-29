@@ -14,8 +14,7 @@ struct PersistenceController {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
         for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+            viewContext.insertStubMovies(count: 10)
         }
         do {
             try viewContext.save()
@@ -28,13 +27,24 @@ struct PersistenceController {
         return result
     }()
 
-    let container: NSPersistentContainer
+    private let container: NSPersistentContainer
+    
+    let viewContext: NSManagedObjectContext
+    let backgroundContext: NSManagedObjectContext
 
     init(inMemory: Bool = false) {
         container = NSPersistentContainer(name: "Movie_DB_SwiftUI")
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
+        
+        viewContext = container.viewContext
+        viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        viewContext.automaticallyMergesChangesFromParent = true
+        
+        backgroundContext = container.newBackgroundContext()
+        backgroundContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in
             if let error = error as NSError? {
                 // Replace this implementation with code to handle the error appropriately.
@@ -51,5 +61,24 @@ struct PersistenceController {
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             }
         })
+    }
+    
+    // MARK: - Core Data Saving support
+
+    func saveContext() throws {
+        if backgroundContext.hasChanges {
+            do {
+                try backgroundContext.save()
+            } catch {
+                throw error
+            }
+        }
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+            } catch {
+                throw error
+            }
+        }
     }
 }
