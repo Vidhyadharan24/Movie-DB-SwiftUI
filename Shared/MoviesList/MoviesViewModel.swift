@@ -19,7 +19,7 @@ class MoviesViewModel: ObservableObject {
     @Published var isOffline = false
     @Published var showNoData = false
     
-    private var showOfflineView: AnyPublisher<Bool, Never> {
+    private lazy var showOfflineView: AnyPublisher<Bool, Never> = {
         Publishers
             .CombineLatest3(self.$dataType, self.$isLoading, self.$isRefreshing)
             .map { element in
@@ -30,9 +30,9 @@ class MoviesViewModel: ObservableObject {
                 }
             }
             .eraseToAnyPublisher()
-    }
+    }()
     
-    private var showNoDataLabel: AnyPublisher<Bool, Never> {
+    private lazy var showNoDataLabel: AnyPublisher<Bool, Never> = {
         Publishers
             .CombineLatest(self.$dataType, self.$isLoading)
             .map { element in
@@ -43,7 +43,7 @@ class MoviesViewModel: ObservableObject {
                 }
             }
             .eraseToAnyPublisher()
-    }
+    }()
 
     var category: Endpoints.Movies.Category = .popular
     

@@ -23,9 +23,11 @@ struct MovieView: View {
                 .resizable()
                 .scaledToFill()
                 .frame(height: self.height)
+                .contentShape(Rectangle())
                 .clipped()
 
             Text(movie.title ?? "Missing Title")
+                .foregroundColor(Color.black)
                 .padding(.horizontal, 8)
             Spacer()
         }

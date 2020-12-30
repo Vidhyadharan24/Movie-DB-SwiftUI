@@ -4,7 +4,7 @@ The app is built using the MVVM + RxSwift architecture with offline support via 
 ## TODO:
 
 - [ ] Pull to refresh in LazyVStack.
-- [ ] Movie Details page.
+- [x] Movie Details page.
 - [ ] Unit testing of view models.
 - [ ] Unit testing of store class.
 - [ ] Rewrite network manager using combine.

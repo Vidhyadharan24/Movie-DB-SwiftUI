@@ -1,5 +1,5 @@
 //
-//  MoviesList.swift
+//  MoviesListView.swift
 //  Shared
 //
 //  Created by Vidhyadharan on 28/12/20.
@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftUIX
 import CoreData
 
-struct MoviesList: View {
+struct MoviesListView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
@@ -17,7 +17,7 @@ struct MoviesList: View {
         animation: .default)
     private var movies: FetchedResults<Movie>
 
-    @ObservedObject private var viewModel = MoviesViewModel()
+    @StateObject private var viewModel = MoviesViewModel()
     
     var body: some View {
         NavigationView {
@@ -35,11 +35,13 @@ struct MoviesList: View {
                     ScrollView {
                         LazyVStack(spacing: 15) {
                             ForEach(movies) { movie in
-                                MovieView(movie: movie, height: 200)
-                                    .background(Color.white)
-                                    .cornerRadius(15)
-                                    .shadow(radius: 3)
-                            }
+                                NavigationLink(destination: MovieDetailsView(viewModel: MovieDetailsViewModel(movieId: movie.id!))) {
+                                    MovieView(movie: movie, height: 200)
+                                        .background(Color.white)
+                                        .cornerRadius(15)
+                                        .shadow(radius: 3)
+                                }
+                            }.buttonStyle(PlainButtonStyle())
                         }.padding()
                     }
                 }
@@ -52,6 +54,6 @@ struct MoviesList: View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        MoviesList().environment(\.managedObjectContext, PersistenceController.preview.viewContext)
+        MoviesListView().environment(\.managedObjectContext, PersistenceController.preview.viewContext)
     }
 }
