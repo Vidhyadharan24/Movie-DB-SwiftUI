@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import Reachability
 
 class MoviesViewModel: ObservableObject {
     
@@ -50,24 +51,20 @@ class MoviesViewModel: ObservableObject {
     private let moviesStore: MoviesStoreProtocol
     
     private var cancellableSet: Set<AnyCancellable> = []
-
+    
     init(moviesStore: MoviesStoreProtocol = MoviesStore()) {
         self.moviesStore = moviesStore
         
         showOfflineView.assign(to: &self.$isOffline)
         showNoDataLabel.assign(to: &self.$showNoData)
-
-//        let initialDataType: DataType = moviesStore.getPersistedMoviesCount() > 0 ? .cached : .noData
-//        self._dataType = BehaviorRelay<DataType>(value: initialDataType)
         
-//        moviesStore
-//            .networkStatus
-//            .withLatestFrom(self._dataType, resultSelector: { ($0, $1) })
-//            .subscribe(onNext: { [weak self] element in
-//                guard element.0, element.1 == .noData else { return }
-//                self?.getMovies()
-//            })
-//            .disposed(by: disposeBag)
+        NotificationCenter.default.publisher(for: .reachabilityChanged)
+            .sink(receiveValue: { [weak self] (notification) in
+                guard let self = self, let reachability = notification.object as? Reachability,
+                      reachability.connection != .unavailable, self.showNoData else { return }
+                self.getMovies()
+            })
+            .store(in: &cancellableSet)
         
         getMovies()
     }

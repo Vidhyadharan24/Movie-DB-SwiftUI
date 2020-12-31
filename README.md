@@ -8,7 +8,7 @@ The app is built using the MVVM + RxSwift architecture with offline support via 
 - [ ] Unit testing of view models.
 - [ ] Unit testing of store class.
 - [ ] Rewrite network manager using combine.
-- [ ] Monitoring network connection and refreshing UI.
+- [x] Monitoring network connection and refreshing UI.
 
 ## Installation
 

@@ -35,7 +35,7 @@ struct MoviesListView: View {
                     ScrollView {
                         LazyVStack(spacing: 15) {
                             ForEach(movies) { movie in
-                                NavigationLink(destination: MovieDetailsView(viewModel: MovieDetailsViewModel(movieId: movie.id!))) {
+                                NavigationLink(destination: MovieDetailsViewDestination(movieId: movie.id!, viewModel: viewModel)) {
                                     MovieView(movie: movie, height: 200)
                                         .background(Color.white)
                                         .cornerRadius(15)
@@ -49,6 +49,18 @@ struct MoviesListView: View {
             .navigationBarTitle("Movies", displayMode: .inline)
         }
         .background(Color(UIColor.systemGray6))
+    }
+}
+
+struct MovieDetailsViewDestination: View {
+    let movieId: String
+    let viewModel: MoviesViewModel
+    
+    var body: some View {
+        MovieDetailsView(viewModel: MovieDetailsViewModel(movieId: movieId))
+            .onDisappear(perform: {
+                viewModel.loadMoviesIfNeeded()
+            })
     }
 }
 
