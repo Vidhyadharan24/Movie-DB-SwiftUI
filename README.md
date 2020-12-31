@@ -15,8 +15,7 @@ The app is built using the MVVM + RxSwift architecture with offline support via 
 The app relies on three external libraries,
 Kingfisher - For loading images
 Reachability - For monitoring network availabilty change
-
-Both Kingfisher and Reachablity are added using the Swift Package Manager, for these no additional steps are required to run the app
+SwiftUIX - For UI components missing in SwiftUI
 
 Funtionality
 ## MoviesList
@@ -25,7 +24,3 @@ The page by default loads the popular movies from the TMDB database and caches i
 
 ## MovieDetails 
 The page loads the cached movie details when the live data api call fails for any reason, an offline bar is shown when the displyed data is cached data. The page auto reloads the movie details when the device is back online by monitoring the network status.
-
-
-## Unit Testing
-Unit testing for the MoviesDataStore and MovieDetailsDataStore (Model) is done via expections, testing MoviesViewModel and MovieDetailsViewModel is achevied via RxTest framework and TestableObserver class. 
