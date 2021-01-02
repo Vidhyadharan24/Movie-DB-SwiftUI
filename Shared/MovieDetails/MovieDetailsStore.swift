@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreData
+import Combine
 
 struct MovieDetailsStoreResult {
     let dataType: DataType
@@ -15,7 +16,9 @@ struct MovieDetailsStoreResult {
 }
 
 protocol MovieDetailsStoreProtocol {
-    func getMovieDetails(id: String, completionHandler: ((MovieDetailsStoreResult) -> Void)?)
+    var movieDetailsSubject: PassthroughSubject<MovieDetailsStoreResult, Error> { get }
+
+    func getMovieDetails(id: String)
 }
 
 class MovieDetailsStore: MovieDetailsStoreProtocol {
@@ -23,57 +26,64 @@ class MovieDetailsStore: MovieDetailsStoreProtocol {
     let coreDataStack: PersistenceController
     let networkManager: NetworkManagerProtocol
 
+    let movieDetailsSubject = PassthroughSubject<MovieDetailsStoreResult, Error>()
+
+    private var cancellableSet: Set<AnyCancellable> = []
+
     init(coreDataStack: PersistenceController = PersistenceController.shared,
          networkManager: NetworkManagerProtocol = NetworkManager.sharedInstance) {
         self.coreDataStack = coreDataStack
         self.networkManager = networkManager
     }
-
-    func getMovieDetails(id: String, completionHandler: ((MovieDetailsStoreResult) -> Void)?) {
+    
+    func getMovieDetails(id: String) {
         let endpoint = Endpoints.MovieDetails(movieId: id)
 
         let backgroundContext = self.coreDataStack.backgroundContext
         let decoder = JSONDecoder()
         decoder.userInfo[CodingUserInfoKey.context] = backgroundContext
-
-        let _ = self.networkManager.apiDataTask(endpoint: endpoint, decoder: decoder) { [weak self] (response: Result<MovieDetails?, NetworkManagerError>?) in
-
-            var error: Error? = nil
-            
-            switch response {
-            case .failure(let networkError):
-                switch networkError {
-                case .apiErrorResponse(let dictionary):
-                    if let code = dictionary["status_code"] as? Int, code == 34 {
-                        completionHandler?(MovieDetailsStoreResult(dataType: .inValid, movieDetails: nil, error: networkError))
-                        return
-                    }
-                default: break
-                }
-                error = networkError
-            case .success(let optionalDetails):
-                do {
-                    guard let movieDetails = optionalDetails, let details = try self?.saveMovieDetailsToDB(movieDetails: movieDetails) else { break }
-                    completionHandler?(MovieDetailsStoreResult(dataType: .live, movieDetails: details, error: error))
-                    return
-                } catch (let coreDataError) {
-                    error = coreDataError
-                }
-            case .none:
-                break
-            }
-                        
+        
+        func apiFailureHandler(error: Error?) {
+            var failureError = error
             do {
-                if let details = try self?.getMovieDetailsFromDB(id: id) {
-                    completionHandler?(MovieDetailsStoreResult(dataType: .cached, movieDetails: details, error: error))
+                if let details = try self.getMovieDetailsFromDB(id: id) {
+                    self.movieDetailsSubject.send(MovieDetailsStoreResult(dataType: .cached, movieDetails: details, error: error))
                     return
                 }
             } catch (let coreDataError) {
-                error = coreDataError
+                failureError = coreDataError
             }
             
-            completionHandler?(MovieDetailsStoreResult(dataType: .noData, movieDetails: nil, error: error))
+            self.movieDetailsSubject.send(MovieDetailsStoreResult(dataType: .noData, movieDetails: nil, error: failureError))
         }
+
+        let networkCallPublisher: AnyPublisher<MovieDetails?, NetworkManagerError> = networkManager.apiDataTask(endpoint: endpoint, decoder: decoder)
+        
+        networkCallPublisher.sink { [weak self] (completion) in
+            switch completion {
+            case .finished: break
+            case .failure(let error):
+                switch error {
+                case .apiErrorResponse(let dictionary):
+                    if let code = dictionary["status_code"] as? Int, code == 34 {
+                        self?.movieDetailsSubject.send(MovieDetailsStoreResult(dataType: .inValid, movieDetails: nil, error: error))
+                    }
+                default:
+                    apiFailureHandler(error: error)
+                }
+            }
+        } receiveValue: { [weak self] (movieDetails) in
+            if let details = movieDetails {
+                do {
+                    let details = try self?.saveMovieDetailsToDB(movieDetails: details)
+                    self?.movieDetailsSubject.send(MovieDetailsStoreResult(dataType: .live, movieDetails: details, error: nil))
+                } catch (let coreDataError) {
+                    apiFailureHandler(error: coreDataError)
+                }
+            } else {
+                apiFailureHandler(error: nil)
+            }
+        }.store(in: &cancellableSet)
     }
     
     // TODO: Would be better to put these helper methods in an extension

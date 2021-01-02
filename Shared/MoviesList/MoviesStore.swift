@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreData
+import Combine
 
 enum DataType {
     case live
@@ -21,8 +22,9 @@ struct MoviesStoreResult {
 }
 
 protocol MoviesStoreProtocol {
-    func getPersistedMoviesCount() -> Int
-    func getMovies(category: Endpoints.Movies.Category, completionHandler: ((MoviesStoreResult) -> Void)?)
+    var moviesResponseSubject: PassthroughSubject<MoviesStoreResult, Error> { get }
+    
+    func getMovies(category: Endpoints.Movies.Category)
 }
 
 class MoviesStore: MoviesStoreProtocol {
@@ -30,49 +32,53 @@ class MoviesStore: MoviesStoreProtocol {
     private let coreDataStack: PersistenceController
     private let networkManager: NetworkManagerProtocol
 
+    let moviesResponseSubject = PassthroughSubject<MoviesStoreResult, Error>()
+    
+    private var cancellableSet: Set<AnyCancellable> = []
+
     init(coreDataStack: PersistenceController = PersistenceController.shared, networkManager: NetworkManagerProtocol = NetworkManager.sharedInstance) {
         self.coreDataStack = coreDataStack
         self.networkManager = networkManager
     }
     
-    func getMovies(category: Endpoints.Movies.Category, completionHandler: ((MoviesStoreResult) -> Void)?) {
+    func getMovies(category: Endpoints.Movies.Category) {
         let endpoint = Endpoints.Movies(category: category)
-        
+
         let backgroundContext = self.coreDataStack.backgroundContext
 
         let decoder = JSONDecoder()
         decoder.userInfo[CodingUserInfoKey.context] = backgroundContext
 
-        let _ = self.networkManager.apiDataTask(endpoint: endpoint, decoder: decoder) { [weak self] (response: Result<Movies?, NetworkManagerError>?) in
-            
-            var error: Error? = nil
-            switch response {
-            case .failure(let networkError):
-                error = networkError
-            case .success(_):
-                do {
-                    try self?.deleteAllMovies()
-                    try self?.coreDataStack.saveContext()
-                    
-                    if self?.getPersistedMoviesCount() ?? 0 != 0 {
-                        completionHandler?(MoviesStoreResult(dataType: .live, error: error))
-                    } else {
-                        completionHandler?(MoviesStoreResult(dataType: .noData, error: error))
-                    }
-                    return
-                } catch (let coreDataError) {
-                    error = coreDataError
-                }
-            case .none: break
+        func apiFailureHandler(error: Error) {
+            if self.getPersistedMoviesCount() != 0 {
+                self.moviesResponseSubject.send(MoviesStoreResult(dataType: .cached, error: error))
+            } else {
+                self.moviesResponseSubject.send(MoviesStoreResult(dataType: .noData, error: error))
             }
-            
-            if self?.getPersistedMoviesCount() ?? 0 != 0 {
-                completionHandler?(MoviesStoreResult(dataType: .cached, error: error))
-                return
-            }
-            
-            completionHandler?(MoviesStoreResult(dataType: .noData, error: error))
         }
+
+        let networkCallPublisher: AnyPublisher<Movies?, NetworkManagerError> = networkManager.apiDataTask(endpoint: endpoint, decoder: decoder)
+        
+        networkCallPublisher.sink { (completion) in
+            switch completion {
+            case .finished: break
+            case .failure(let error):
+                apiFailureHandler(error: error)
+            }
+        } receiveValue: { [weak self] (_) in
+            do {
+                try self?.deleteAllMovies()
+                try self?.coreDataStack.saveContext()
+                
+                if self?.getPersistedMoviesCount() ?? 0 != 0 {
+                    self?.moviesResponseSubject.send(MoviesStoreResult(dataType: .live, error: nil))
+                } else {
+                    self?.moviesResponseSubject.send(MoviesStoreResult(dataType: .noData, error: nil))
+                }
+            } catch (let coreDataError) {
+                apiFailureHandler(error: coreDataError)
+            }
+        }.store(in: &cancellableSet)
     }
     
     func deleteAllMovies() throws {

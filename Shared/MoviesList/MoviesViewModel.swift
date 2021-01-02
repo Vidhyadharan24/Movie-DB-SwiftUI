@@ -66,7 +66,24 @@ class MoviesViewModel: ObservableObject {
             })
             .store(in: &cancellableSet)
         
+        bindStore()
         getMovies()
+    }
+    
+    func bindStore() {
+        moviesStore
+            .moviesResponseSubject
+            .sink { [weak self] (completion) in
+                switch completion {
+                case .finished: break
+                case .failure(let error):
+                    self?.error = error
+                }
+            } receiveValue: { [weak self] (moviesStoreResult) in
+                self?.isLoading = false
+                self?.isRefreshing = false
+                self?.dataType = moviesStoreResult.dataType
+            }.store(in: &cancellableSet)
     }
     
     func loadMoviesIfNeeded() {
@@ -78,14 +95,7 @@ class MoviesViewModel: ObservableObject {
         self.isRefreshing = self.dataType != .noData
         self.isLoading = self.dataType == .noData
         
-        moviesStore.getMovies(category: category) { [weak self] storeState in
-            self?.isLoading = false
-            self?.isRefreshing = false
-            self?.dataType = storeState.dataType
-            
-            guard let error = storeState.error else { return }
-            self?.error = error
-        }
+        moviesStore.getMovies(category: category)
     }
     
 }

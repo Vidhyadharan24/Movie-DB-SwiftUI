@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import Reachability
+import Combine
 
 enum NetworkManagerError: Error {
     case networkFailureError(String)
@@ -20,9 +21,12 @@ enum DecoderConfigurationError: Error {
 }
 
 protocol NetworkManagerProtocol {
+//    func apiDataTask<T: Codable>(endpoint: EndPoint,
+//                     decoder: JSONDecoder,
+//                     completion: @escaping (Result<T?, NetworkManagerError>) -> Void)
+    
     func apiDataTask<T: Codable>(endpoint: EndPoint,
-                     decoder: JSONDecoder,
-                     completion: @escaping (Result<T?, NetworkManagerError>) -> Void)
+                                 decoder: JSONDecoder) -> AnyPublisher<T?, NetworkManagerError>
 }
 
 class NetworkManager: NetworkManagerProtocol {
@@ -30,6 +34,8 @@ class NetworkManager: NetworkManagerProtocol {
     static let sharedInstance = NetworkManager()
     
     private let reachability = try! Reachability()
+    
+    private let backgroundQueue = DispatchQueue(label: "NetworkRequest.queue", qos: .background)
     
     private init() {
 
@@ -103,4 +109,29 @@ class NetworkManager: NetworkManagerProtocol {
         dataTask.resume()
     }
 
+    func apiDataTask<T: Codable>(endpoint: EndPoint,
+                                 decoder: JSONDecoder) -> AnyPublisher<T?, NetworkManagerError> {
+        URLSession.shared
+            .dataTaskPublisher(for: endpoint.urlRequest())
+            .tryMap({ (apiResponse) -> T? in
+                guard let httpResponse = apiResponse.response as? HTTPURLResponse, httpResponse.statusCode != 204 else {
+                    return nil
+                }
+                
+                do {
+                    return try decoder.decode(T.self, from: apiResponse.data)
+                } catch (let error) {
+                    if let dictionary = try JSONSerialization.jsonObject(with: apiResponse.data, options: .mutableContainers) as? [String: Any] {
+                        throw NetworkManagerError.apiErrorResponse(dictionary)
+                    }
+                    throw NetworkManagerError.decodeError(error.localizedDescription)
+                }
+            })
+            .mapError {
+                NetworkManagerError.networkFailureError($0.localizedDescription)
+            }
+            .subscribe(on: self.backgroundQueue)
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }
 }

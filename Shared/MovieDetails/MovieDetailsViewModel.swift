@@ -82,19 +82,29 @@ class MovieDetailsViewModel: ObservableObject {
             })
             .store(in: &cancellableSet)
         
+        bindStore()
         getMovieDetails()
+    }
+    
+    func bindStore() {
+        movieDetailsStore
+            .movieDetailsSubject
+            .sink { [weak self] (completion) in
+                switch completion {
+                case .finished: break
+                case .failure(let error):
+                    self?.error = error
+                }
+            } receiveValue: { [weak self] (storeState) in
+                self?.isLoading = false
+                self?.dataType = storeState.dataType
+                self?.movieDetails = storeState.movieDetails
+            }.store(in: &cancellableSet)
     }
 
     func getMovieDetails() {
         self.isLoading = true
         
-        movieDetailsStore.getMovieDetails(id: self.movieId) { [weak self] storeState in
-            self?.isLoading = false
-            self?.dataType = storeState.dataType
-            self?.movieDetails = storeState.movieDetails
-            
-            guard let error = storeState.error else { return }
-            self?.error = error
-        }
+        movieDetailsStore.getMovieDetails(id: self.movieId)
     }
 }
